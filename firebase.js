@@ -77,6 +77,9 @@ export async function createUserProfile(uid, data) {
   const snap = await getDoc(userRef);
 
   if (!snap.exists()) {
+  // Generate unique referral code: PRIME + 6 random digits
+  const referralCode = "PRIME" + Math.floor(100000 + Math.random() * 900000).toString();
+
   await setDoc(userRef, {
   uid,
   avatar: "user1.jpg",
@@ -99,12 +102,22 @@ export async function createUserProfile(uid, data) {
   total_followers_ordered: 0,
 
   // PRIME VIRAL BONUS SYSTEM
+  referralCode: referralCode,
   referredBy: "",
   referralCount: 0,
   referralCredited: false,
   primeViralBonusClaimed: false,
   referralCompletedUsers: [],
   total_checkins: 0,
+  day3BonusClaimed: false,
+
+  // Referral reward tracking
+  referralReward1Claimed: false,
+  referralReward2Claimed: false,
+  referralReward3Shown: false,
+
+  // Refer code entry tracking
+  referCodeEntered: false,
 
   created_at: serverTimestamp(),
   last_login: serverTimestamp()
