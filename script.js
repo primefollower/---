@@ -322,16 +322,24 @@ onAuthStateChanged(auth, async (user) => {
       });
   }
 
-  // Populate global user state
-  window.cashTreasureUser = {
-    uid: user.uid,
-    email,
-    username,
-    credits,
-    avatar: profile?.avatar || "user1.jpg",
-    total_followers_ordered: profile?.total_followers_ordered || 0
-  };
+    // Generate referral code for old users who don't have one
+    try {
+      if (profile && !profile.referralCode) {
+        const newCode = "PRIME" + Math.floor(100000 + Math.random() * 900000).toString();
+        await updateDoc(doc(db, "users", user.uid), { referralCode: newCode });
+        profile.referralCode = newCode;
+      }
+    } catch (e) { console.warn("Could not generate referral code:", e); }
 
+    // Populate global user state
+    window.cashTreasureUser = {
+      uid: user.uid,
+      email,
+      username,
+      credits,
+      avatar: profile?.avatar || "user1.jpg",
+      total_followers_ordered: profile?.total_followers_ordered || 0
+    };
   // Live Firestore sync — updates credits and ad count in real time
   onSnapshot(doc(db, "users", user.uid), (snap) => {
     const data = snap.data();
@@ -359,10 +367,154 @@ window.dispatchEvent(
 
 // Init Refer Page
 initReferPage(window.cashTreasureUser);
+
+    // Show "Enter Refer Code" overlay ONLY for brand new signups (account created within last 60 seconds)
+    try {
+      if (profile && !profile.referCodeEntered && !profile.referredBy) {
+        const createdAt = profile.created_at?.toDate?.();
+        const isNewUser = createdAt && (Date.now() - createdAt.getTime()) < 60000;
+        if (isNewUser) {
+          showReferCodeEntryOverlay(user.uid);
+        } else {
+          // Old user — silently mark as entered so they never see it
+          await updateDoc(doc(db, "users", user.uid), { referCodeEntered: true });
+        }
+      }
+    } catch (referErr) {
+      console.warn("[ReferCode] Non-critical error:", referErr);
+    }
 });
 
+// ── Refer Code Entry Overlay ─────────────────────────────────────────────────
 
+function showReferCodeEntryOverlay(uid) {
+  document.querySelectorAll('.refer-code-entry-overlay').forEach(el => el.remove());
 
+  const overlay = document.createElement("div");
+  overlay.className = "refer-code-entry-overlay";
+  overlay.style.cssText = `
+    position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex;
+    align-items:center; justify-content:center; z-index:99999;
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  `;
+
+  overlay.innerHTML = `
+    <div style="background:linear-gradient(135deg,#0f172a,#1e293b); border-radius:24px;
+                padding:32px 24px; text-align:center; max-width:360px; width:92%;
+                box-shadow:0 20px 60px rgba(0,0,0,0.5); border:2px solid rgba(79,172,254,0.3);">
+      <div style="font-size:45px; margin-bottom:10px;">🎁</div>
+      <h2 style="color:#fff; font-size:22px; font-weight:900; margin-bottom:6px;">
+        Refer & Earn
+      </h2>
+      <p style="color:rgba(255,255,255,0.7); font-size:14px; margin-bottom:20px;">
+        Do you have a referral code?
+      </p>
+      <div style="position:relative; margin-bottom:18px;">
+        <input id="refer-code-input" type="text" maxlength="11"
+               style="width:100%; padding:16px 18px; border-radius:14px;
+                      border:2px solid rgba(79,172,254,0.3); background:rgba(255,255,255,0.08);
+                      color:#fff; font-size:16px; font-weight:700; text-align:center;
+                      letter-spacing:2px; outline:none; text-transform:uppercase;"
+               placeholder="">
+        <span id="refer-code-placeholder" style="position:absolute; top:50%; left:50%;
+              transform:translate(-50%,-50%); color:rgba(255,255,255,0.3); font-size:14px;
+              font-weight:600; pointer-events:none;">Optional</span>
+      </div>
+      <button id="refer-code-confirm-btn" style="
+        width:100%; padding:16px; border:none; border-radius:50px; font-size:17px;
+        font-weight:800; cursor:pointer; color:#fff;
+        background:linear-gradient(135deg,#ff6b81,#ff4466);
+        box-shadow:0 8px 25px rgba(255,68,102,0.4); margin-bottom:12px;
+      ">Confirm</button>
+      <button id="refer-code-skip-btn" style="
+        width:100%; padding:14px; border:none; border-radius:50px; font-size:14px;
+        font-weight:600; cursor:pointer; color:#94a3b8; background:rgba(255,255,255,0.08);
+      ">I don't have a refer code</button>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const input = document.getElementById("refer-code-input");
+  const placeholder = document.getElementById("refer-code-placeholder");
+  const confirmBtn = document.getElementById("refer-code-confirm-btn");
+  const skipBtn = document.getElementById("refer-code-skip-btn");
+
+  // Remove placeholder on focus
+  input.addEventListener("focus", () => { placeholder.style.display = "none"; });
+  input.addEventListener("blur", () => {
+    if (!input.value.trim()) placeholder.style.display = "block";
+  });
+
+  // Skip button — close overlay, mark as entered
+  skipBtn.addEventListener("click", async () => {
+    try {
+      await updateDoc(doc(db, "users", uid), { referCodeEntered: true });
+    } catch (e) { console.warn(e); }
+    overlay.remove();
+  });
+
+  // Confirm button — verify code
+  confirmBtn.addEventListener("click", async () => {
+    const code = input.value.trim().toUpperCase();
+
+    if (!code) {
+      showToast("Please enter a referral code", "error");
+      return;
+    }
+
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Verifying...";
+    confirmBtn.style.opacity = "0.6";
+
+    try {
+      // Search for user with this referral code
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("referralCode", "==", code));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        showToast("Invalid code", "error");
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.opacity = "1";
+        return;
+      }
+
+      const inviterDoc = snap.docs[0];
+      const inviterUid = inviterDoc.id;
+
+      // Can't refer yourself
+      if (inviterUid === uid) {
+        showToast("You can't use your own code", "error");
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Confirm";
+        confirmBtn.style.opacity = "1";
+        return;
+      }
+
+      // Save referral
+      await updateDoc(doc(db, "users", uid), {
+        referredBy: inviterUid,
+        referCodeEntered: true
+      });
+
+      // Show success after 3 seconds
+      confirmBtn.textContent = "Verifying...";
+      setTimeout(() => {
+        showToast("Successful", "success");
+        overlay.remove();
+      }, 3000);
+
+    } catch (err) {
+      console.error("[ReferCode] Error:", err);
+      showToast("Something went wrong. Try again.", "error");
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Confirm";
+      confirmBtn.style.opacity = "1";
+    }
+  });
+}
 
 
 
