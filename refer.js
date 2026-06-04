@@ -189,6 +189,9 @@ async function loadReferralState(uid) {
     // Check for unclaimed referral rewards
     checkPendingReferralRewards(uid, data);
 
+    // Load friends list
+    loadFriendsList(uid);
+
   } catch (err) {
     console.error("[refer.js] loadReferralState:", err);
   }
@@ -352,6 +355,101 @@ function showPrimeViralBonusOverlay(uid) {
     }, 300);
   });
 }
+
+
+
+
+// ── 7B. Load & Render Referred Friends List ───────────────────────────────────
+
+async function loadFriendsList(uid) {
+  const listEl = document.getElementById("refer-friends-list");
+  if (!listEl) return;
+
+  try {
+    // Find users who have this user as referredBy
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("referredBy", "==", uid));
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      listEl.innerHTML = `
+        <p style="color:#9ca3af; opacity:0.7; text-align:center; font-size:14px; font-weight:600; padding:20px 0;">
+          YOU HAVEN'T REFER ANY FRIEND YET
+        </p>`;
+      return;
+    }
+
+    // Get up to 5 most recent referred friends
+    const friends = [];
+    snap.docs.forEach(d => {
+      const data = d.data();
+      friends.push({
+        username: data.username || data.email?.split("@")[0] || "User",
+        totalCheckins: data.total_checkins || 0,
+        referralCredited: data.referralCredited || false,
+        createdAt: data.created_at?.toDate?.() || new Date()
+      });
+    });
+
+    // Sort by creation date (newest first) and limit to 5
+    friends.sort((a, b) => b.createdAt - a.createdAt);
+    const display = friends.slice(0, 5);
+
+    let html = "";
+    display.forEach((friend, i) => {
+      const checkins = Math.min(friend.totalCheckins, 3);
+      const progressPct = Math.min((checkins / 3) * 100, 100);
+      const isComplete = checkins >= 3;
+
+      const barColor = isComplete
+        ? "linear-gradient(90deg, #FFD700, #FFA500)"
+        : "linear-gradient(90deg, #93c5fd, #a78bfa)";
+
+      const statusText = isComplete
+        ? '<span style="color:#FFD700; font-weight:800;">✅ Completed</span>'
+        : `<span style="color:#9ca3af; font-size:12px;">${checkins}/3 check-ins</span>`;
+
+      html += `
+        <div style="display:flex; align-items:center; gap:12px; padding:14px 0;
+                    ${i < display.length - 1 ? 'border-bottom:1px solid rgba(79,172,254,0.1);' : ''}">
+          <div style="width:36px; height:36px; border-radius:50%;
+                      background:linear-gradient(135deg,#4facfe,#a78bfa);
+                      display:flex; align-items:center; justify-content:center;
+                      color:#fff; font-weight:800; font-size:14px; flex-shrink:0;">
+            ${(i + 1)}
+          </div>
+          <div style="flex:1; min-width:0;">
+            <p style="font-size:14px; font-weight:700; color:#1e3a8a; margin-bottom:6px;
+                      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${friend.username}
+            </p>
+            <div style="width:100%; height:6px; background:rgba(79,172,254,0.12);
+                        border-radius:10px; overflow:hidden;">
+              <div style="height:100%; width:${progressPct}%; background:${barColor};
+                          border-radius:10px; transition:width 0.8s ease;"></div>
+            </div>
+          </div>
+          <div style="flex-shrink:0; text-align:right;">
+            ${statusText}
+          </div>
+        </div>`;
+    });
+
+    if (friends.length > 5) {
+      html += `<p style="text-align:center; color:#9ca3af; font-size:12px; padding-top:10px;">
+        Showing latest 5 of ${friends.length} friends
+      </p>`;
+    }
+
+    listEl.innerHTML = html;
+
+  } catch (err) {
+    console.error("[refer.js] loadFriendsList error:", err);
+  }
+}
+
+
+
 
 // ── 8. Progress UI ─────────────────────────────────────────────────────────────
 
