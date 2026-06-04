@@ -135,6 +135,7 @@ document.addEventListener('click', (e) => {
   const action = item.dataset.action || '';
   const isPaid = action.toLowerCase().includes("paid");
   const isViralBonus = action.toLowerCase().includes("prime viral bonus");
+  const isDay3Bonus = action.toLowerCase().includes("day 3 bonus");
 
   // Show heading differently for viral bonus
   const modalTitle = document.querySelector('#order-detail-modal .modal-box h3');
@@ -143,6 +144,12 @@ document.addEventListener('click', (e) => {
     if (modalTitle) {
       modalTitle.textContent = "PRIME VIRAL BONUS";
       modalTitle.style.color = "#FFD700";
+    }
+    if (costLine) costLine.innerHTML = `Cost: <span style="font-weight:800; color:#22c55e;">FREE</span>`;
+  } else if (isDay3Bonus) {
+    if (modalTitle) {
+      modalTitle.textContent = "DAY 3 BONUS";
+      modalTitle.style.color = "#60a5fa";
     }
     if (costLine) costLine.innerHTML = `Cost: <span style="font-weight:800; color:#22c55e;">FREE</span>`;
   } else if (isPaid && costLine) {
