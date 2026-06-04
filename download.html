@@ -625,22 +625,10 @@
 
 
 <script>
-const params = new URLSearchParams(window.location.search);
-const ref = params.get("ref");
-if (ref) localStorage.setItem("primeReferralCode", ref);
-
 document
   .getElementById("download-btn")
   .addEventListener("click", () => {
-
-  let apkUrl =
-  "https://github.com/primefollower/---/releases/download/v1.2/Primefollower.apk";
-
-    if (ref) {
-      apkUrl += `?ref=${encodeURIComponent(ref)}`;
-    }
-
-    window.location.href = apkUrl;
+    window.location.href = "https://github.com/primefollower/---/releases/download/v1.2/Primefollower.apk";
 });
 </script>
 </body>
