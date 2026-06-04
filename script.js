@@ -322,14 +322,14 @@ onAuthStateChanged(auth, async (user) => {
       });
   }
 
-    // Generate referral code for old users who don't have one
-    try {
-      if (profile && !profile.referralCode) {
-        const newCode = "PRIME" + Math.floor(100000 + Math.random() * 900000).toString();
-        await updateDoc(doc(db, "users", user.uid), { referralCode: newCode });
-        profile.referralCode = newCode;
+    // Referral code generation is now handled by firebase.js createUserProfile migration
+    // Re-fetch profile to get any migrated fields
+    if (profile && !profile.referralCode) {
+      const freshProfile = await getUserProfile(user.uid);
+      if (freshProfile) {
+        Object.assign(profile, freshProfile);
       }
-    } catch (e) { console.warn("Could not generate referral code:", e); }
+    }
 
     // Populate global user state
     window.cashTreasureUser = {
