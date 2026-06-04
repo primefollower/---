@@ -123,10 +123,55 @@ export async function createUserProfile(uid, data) {
   last_login: serverTimestamp()
 });
   } else {
-    await updateDoc(userRef, { last_login: serverTimestamp() });
+    // Migrate old users — add any missing fields
+    const existingData = snap.data();
+    const migrationFields = {};
+
+    if (!existingData.referralCode) {
+      migrationFields.referralCode = "PRIME" + Math.floor(100000 + Math.random() * 900000).toString();
+    }
+    if (existingData.referCodeEntered === undefined) {
+      migrationFields.referCodeEntered = true; // Old users skip the refer code overlay
+    }
+    if (existingData.referredBy === undefined) {
+      migrationFields.referredBy = "";
+    }
+    if (existingData.referralCount === undefined) {
+      migrationFields.referralCount = 0;
+    }
+    if (existingData.referralCredited === undefined) {
+      migrationFields.referralCredited = false;
+    }
+    if (existingData.primeViralBonusClaimed === undefined) {
+      migrationFields.primeViralBonusClaimed = false;
+    }
+    if (existingData.total_checkins === undefined) {
+      migrationFields.total_checkins = 0;
+    }
+    if (existingData.day3BonusClaimed === undefined) {
+      migrationFields.day3BonusClaimed = false;
+    }
+    if (existingData.referralReward1Claimed === undefined) {
+      migrationFields.referralReward1Claimed = false;
+    }
+    if (existingData.referralReward2Claimed === undefined) {
+      migrationFields.referralReward2Claimed = false;
+    }
+    if (existingData.referralReward3Shown === undefined) {
+      migrationFields.referralReward3Shown = false;
+    }
+    if (existingData.total_followers_ordered === undefined) {
+      migrationFields.total_followers_ordered = 0;
+    }
+    if (existingData.total_earned === undefined) {
+      migrationFields.total_earned = 0;
+    }
+
+    migrationFields.last_login = serverTimestamp();
+
+    await updateDoc(userRef, migrationFields);
   }
 }
-
 // ── 4. Order & Transaction Helpers ───────────────────────────────────────────
 
 /**
