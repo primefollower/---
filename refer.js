@@ -26,9 +26,8 @@ import {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const APP_DOMAIN =
-  window.location.origin +
-  "/Free-Followers-/download.html";
+const APK_DOWNLOAD_LINK =
+  "https://github.com/primefollower/---/releases/download/v1.2/Primefollower.apk";
 const MAX_REFERRALS = 3;
 const REFERRAL_CREDITS = [0, 10, 25, 0]; // index = referral count
 
@@ -170,15 +169,16 @@ async function loadReferralState(uid) {
     const referralCount = data.referralCount || 0;
     const primeViralBonusClaimed = data.primeViralBonusClaimed || false;
     const referralExpired = primeViralBonusClaimed;
+    const referralCode = data.referralCode || "PRIME000000";
 
-    const referLink = `${APP_DOMAIN}?ref=${uid}`;
+    // Show referral code instead of link
     const linkEl = document.getElementById("refer-link-value");
-    if (linkEl) linkEl.value = referLink;
+    if (linkEl) linkEl.value = referralCode;
 
     updateReferralProgress(referralCount, primeViralBonusClaimed);
 
-    wireCopyButton(referLink, referralExpired);
-    wireShareButton(referLink, referralExpired);
+    wireCopyButton(referralCode, referralExpired);
+    wireShareButton(referralCode, referralExpired);
 
     if (referralCount >= MAX_REFERRALS) {
       showClaimSection(primeViralBonusClaimed);
@@ -380,11 +380,10 @@ function updateReferralProgress(count, claimed) {
 
 // ── 9. Copy Button ─────────────────────────────────────────────────────────────
 
-function wireCopyButton(link, expired) {
+function wireCopyButton(code, expired) {
   const btn = document.getElementById("refer-copy-btn");
   if (!btn) return;
 
-  // Remove old listeners
   const fresh = btn.cloneNode(true);
   btn.parentNode.replaceChild(fresh, btn);
 
@@ -395,21 +394,20 @@ function wireCopyButton(link, expired) {
   }
 
   fresh.addEventListener("click", () => {
-    navigator.clipboard.writeText(link).then(() => {
-      window.showToast?.("LINK COPIED", "success");
+    navigator.clipboard.writeText(code).then(() => {
+      window.showToast?.("CODE COPIED", "success");
     }).catch(() => {
-      fallbackCopy(link);
+      fallbackCopy(code);
     });
   });
 }
 
 // ── 10. Share Button ───────────────────────────────────────────────────────────
 
-function wireShareButton(link, expired) {
+function wireShareButton(code, expired) {
   const btn = document.getElementById("refer-share-btn");
   if (!btn) return;
 
-  // Remove old listeners
   const fresh = btn.cloneNode(true);
   btn.parentNode.replaceChild(fresh, btn);
 
@@ -417,24 +415,28 @@ function wireShareButton(link, expired) {
     fresh.innerHTML = '<i class="fas fa-lock"></i>&nbsp; REFERRAL COMPLETE';
     fresh.disabled = true;
     fresh.addEventListener("click", () => {
-      window.showToast?.("You have already completed all 3 referrals. PRIME VIRAL BONUS is once per lifetime.", "error");
+      window.showToast?.("PRIME VIRAL BONUS is once per lifetime.", "error");
     });
     return;
   }
 
   fresh.addEventListener("click", async () => {
+    const shareText = `🚀 Get FREE Instagram Followers!\n\n` +
+      `Download Prime Follower & use my referral code: ${code}\n\n` +
+      `👉 Download: ${APK_DOWNLOAD_LINK}\n\n` +
+      `You'll get 50 FREE followers after 3 daily check-ins! 🎁`;
+
     if (navigator.share) {
       try {
         await navigator.share({
           title: "Join Prime Follower 🚀",
-          text: "Get free Instagram followers! Use my referral link 👇",
-          url: link
+          text: shareText
         });
       } catch (err) {
-        if (err.name !== "AbortError") fallbackCopy(link);
+        if (err.name !== "AbortError") fallbackCopy(code);
       }
     } else {
-      fallbackCopy(link);
+      fallbackCopy(code);
     }
   });
 }
@@ -578,30 +580,9 @@ function wireClaimForm(uid, alreadyClaimed) {
 // ── 13. Incoming Referral Tracking ────────────────────────────────────────────
 
 async function checkIncomingReferral(uid) {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const inviterUid = params.get("ref") || localStorage.getItem("primeReferralCode");
-
-    if (!inviterUid || inviterUid === uid) return;
-
-    const userRef = doc(db, "users", uid);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) return;
-
-    const data = userSnap.data();
-    if (data.referredBy) return;
-
-    await updateDoc(userRef, { referredBy: inviterUid });
-
-    localStorage.removeItem("primeReferralCode");
-    const cleanUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
-
-    console.log("✅ Referral saved:", inviterUid);
-
-  } catch (err) {
-    console.error("[refer.js] checkIncomingReferral:", err);
-  }
+  // Referral is now handled via code entry overlay in script.js
+  // This function is kept for backward compatibility but does nothing
+  return;
 }
 
 // ── 14. Daily Check-In Hook ───────────────────────────────────────────────────
@@ -626,10 +607,9 @@ export async function onCheckinComplete(uid) {
     const inviterData = inviterSnap.data();
     const currentCount = inviterData.referralCount || 0;
 
-    if (currentCount >= MAX_REFERRALS) return;
-
     const newCount = currentCount + 1;
-    const creditReward = REFERRAL_CREDITS[newCount] || 0;
+    // Only give credit rewards for first 3 referrals
+    const creditReward = newCount <= MAX_REFERRALS ? (REFERRAL_CREDITS[newCount] || 0) : 0;
 
     const inviterUpdate = {
       referralCount: increment(1)
